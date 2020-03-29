@@ -4,7 +4,7 @@ import com.tcg.libgdxmultiplayerdemo.entities.Ship;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public final class PlayerDTO {
+public final class PlayerDTO implements JSONAble {
 
     public final String id;
     public final float x;
@@ -31,6 +31,7 @@ public final class PlayerDTO {
         this.velY = (float) data.getDouble("velY");
     }
 
+    @Override
     public JSONObject toJSON() throws JSONException {
         JSONObject data = new JSONObject();
         data.put("id", this.id);
