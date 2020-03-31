@@ -67,6 +67,16 @@ io.on('connection', (socket) => {
     socket.on('remove_bullet', data => {
         deleteBullet(data.bulletId);
     });
+    socket.on('player_hit', data => {
+        console.log(`Player with id ${id} is HIT`, data);
+        const bullet = bullets[data.bullet];
+        socket.broadcast.emit('player_hit', {bullet: data.bullet, playerFired: bullet.playerId, playerHit: id});
+        delete bullets[data.bullet];
+    });
+    socket.on('player_respawn', () => {
+        console.log(`RESPAWN ${id}`);
+        socket.broadcast.emit('player_respawn', {player: id});
+    });
     socket.on('disconnect', () => {
         console.log(`User with id ${id} has disconnected.`);
         let found = false;

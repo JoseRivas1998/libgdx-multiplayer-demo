@@ -14,6 +14,7 @@ public class Ship extends AbstractEntity {
     private static final float RADIUS = 16.0f;
     private static final float ACCELERATION = 300.0f;
     private static final float ROTATION_SPEED = MathUtils.PI2;
+    private static final float RESPAWN_TIMER = 1f;
 
     public static final Color PLAYER_COLOR = Color.BLUE;
     public static final Color ENEMY_COLOR = Color.RED;
@@ -27,6 +28,9 @@ public class Ship extends AbstractEntity {
     private Vector2 prevVelocity;
     private float prevAngle;
 
+    private boolean dead;
+    private float respawnTime;
+
     public Ship(Color shipColor) {
         super();
         this.shipColor = shipColor;
@@ -36,13 +40,15 @@ public class Ship extends AbstractEntity {
         reset();
         prevVelocity = new Vector2(getVelocity());
         prevAngle = this.angle;
+        dead = false;
+        respawnTime = 0;
     }
 
     public void reset() {
         setVelocity(0, 0);
         setX(MultiplayerDemo.WORLD_WIDTH * 0.5f);
         setY(MultiplayerDemo.WORLD_HEIGHT * 0.5f);
-        this.prevAngle = 0;
+        this.angle = 0;
         isThrusting = false;
         setShape();
         MultiplayerDemo.content.stopSound(ContentManager.SoundEffect.THRUSTER);
@@ -96,10 +102,33 @@ public class Ship extends AbstractEntity {
 
     @Override
     public void update(float dt) {
+        if (isDead()) {
+            respawnTime += dt;
+            return;
+        }
         applyVelocity(dt);
         wrapPosition(0, MultiplayerDemo.WORLD_WIDTH, 0, MultiplayerDemo.WORLD_HEIGHT);
         setShape();
 
+    }
+
+    public boolean isDead() {
+        return dead;
+    }
+
+    public boolean shouldRespawn() {
+        return dead && Float.compare(respawnTime, RESPAWN_TIMER) >= 0;
+    }
+
+    public void kill() {
+        dead = true;
+        respawnTime = 0;
+    }
+
+    public void respawn() {
+        dead = false;
+        respawnTime = 0;
+        reset();
     }
 
     @Override

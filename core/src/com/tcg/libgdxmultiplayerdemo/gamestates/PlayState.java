@@ -174,6 +174,47 @@ public class PlayState extends AbstractGameState {
                     }
                 }
             });
+            socket.on(SocketEvents.PLAYER_HIT, new Emitter.Listener() {
+                @Override
+                public void call(Object... args) {
+                    JSONObject data = (JSONObject) args[0];
+                    try {
+                        final String playerFired = data.getString("playerFired");
+                        final String playerHit = data.getString("playerHit");
+                        final String bullet = data.getString("bullet");
+                        if (playerFired.equals(socket.id())) {
+                            friendlyBulletMutex.acquire();
+                            friendlyBullets.remove(bullet);
+                            friendlyBulletMutex.release();
+                        } else {
+                            enemyBulletsMutex.acquire();
+                            enemyBullets.remove(bullet);
+                            enemyBulletsMutex.release();
+                        }
+                        Ship ship = enemies.get(playerHit);
+                        if (ship != null) {
+                            killShip(ship);
+                        }
+                    } catch (JSONException | InterruptedException e) {
+                        Gdx.app.error(TAG, e.getMessage(), e);
+                    }
+                }
+            });
+            socket.on(SocketEvents.PLAYER_RESPAWN, new Emitter.Listener() {
+                @Override
+                public void call(Object... args) {
+                    try {
+                        JSONObject data = (JSONObject) args[0];
+                        final String player = data.getString("player");
+                        Ship ship = enemies.get(player);
+                        if (ship != null) {
+                            ship.respawn();
+                        }
+                    } catch (JSONException e) {
+                        Gdx.app.error(TAG, e.getMessage(), e);
+                    }
+                }
+            });
             socket.connect();
         } catch (URISyntaxException e) {
             Gdx.app.error(TAG, e.getMessage(), e);
@@ -192,7 +233,7 @@ public class PlayState extends AbstractGameState {
     @Override
     public void handleInput(float dt) {
         player.handleInput(dt);
-        if(MyInput.keyCheckPressed(MyInput.SHOOT)) {
+        if (MyInput.keyCheckPressed(MyInput.SHOOT)) {
             fireBullet();
         }
     }
@@ -228,6 +269,10 @@ public class PlayState extends AbstractGameState {
     public void update(float dt) {
         updateSocketTimer(dt);
         player.update(dt);
+        if (player.shouldRespawn()) {
+            player.respawn();
+            socket.emit(SocketEvents.PLAYER_RESPAWN);
+        }
         for (Ship ship : enemies.values()) {
             ship.update(dt);
         }
@@ -244,11 +289,24 @@ public class PlayState extends AbstractGameState {
                 Map.Entry<String, Bullet> entry = iter.next();
                 Bullet bullet = entry.getValue();
                 bullet.update(dt);
+                if (!player.isDead() && player.collidingWith(bullet)) {
+                    iter.remove();
+                    JSONObject data = new JSONObject();
+                    data.put("bullet", entry.getKey());
+                    data.put("player", socket.id());
+                    socket.emit(SocketEvents.PLAYER_HIT, data);
+                    killShip(player);
+                }
             }
             enemyBulletsMutex.release();
-        } catch (InterruptedException e) {
+        } catch (InterruptedException | JSONException e) {
             Gdx.app.error(TAG, e.getMessage(), e);
         }
+    }
+
+    private void killShip(Ship ship) {
+        ship.kill();
+        MultiplayerDemo.content.playSound(ContentManager.SoundEffect.EXPLODE);
     }
 
     private void updateFriendlyBullets(float dt) {
@@ -259,7 +317,7 @@ public class PlayState extends AbstractGameState {
                 Map.Entry<String, Bullet> entry = iter.next();
                 Bullet bullet = entry.getValue();
                 bullet.update(dt);
-                if(bullet.getX() < 0 || bullet.getX() > MultiplayerDemo.WORLD_WIDTH || bullet.getY() < 0 || bullet.getY() > MultiplayerDemo.WORLD_HEIGHT) {
+                if (bullet.getX() < 0 || bullet.getX() > MultiplayerDemo.WORLD_WIDTH || bullet.getY() < 0 || bullet.getY() > MultiplayerDemo.WORLD_HEIGHT) {
                     iter.remove();
                     try {
                         JSONObject data = new JSONObject();
@@ -296,9 +354,9 @@ public class PlayState extends AbstractGameState {
         sr.begin(ShapeRenderer.ShapeType.Line);
         sr.setProjectionMatrix(viewport.getCamera().combined);
         for (Ship ship : enemies.values()) {
-            ship.draw(dt, sr);
+            if (!ship.isDead()) ship.draw(dt, sr);
         }
-        player.draw(dt, sr);
+        if (!player.isDead()) player.draw(dt, sr);
         try {
             friendlyBulletMutex.acquire();
             for (Bullet bullet : friendlyBullets.values()) {
@@ -335,6 +393,8 @@ public class PlayState extends AbstractGameState {
         final static String NEW_BULLET = "new_bullet";
         final static String REMOVE_BULLET = "remove_bullet";
         final static String DUPLICATE_BULLET = "duplicate_bullet";
+        final static String PLAYER_HIT = "player_hit";
+        final static String PLAYER_RESPAWN = "player_respawn";
     }
 
 }
